@@ -22,7 +22,7 @@ export const router = new Router()
 
 router.add('/', async (req, res) => {
   res.status = 200
-  res.body = await Deno.readFile('./client.html')
+  res.body = await Deno.open('./client.html')
 
   req.respond(res)
 })
@@ -34,14 +34,8 @@ router.add('/events', async (req, res) => {
   res.headers.set('Connection', 'keep-alive')
   res.headers.set('Cache-Control', 'no-cache')
 
-  const origWrite = req.w.write
-  req.w.write = async function (p: Uint8Array): Promise<number> {
-    const n = await origWrite.call(this, p)
-    await this.flush()
-    return n
-  }
-
-  req.w.write(encodeHeader(res))
+  await req.w.write(encodeHeader(res))
+  await req.w.flush()
   
   requests.push(req)
 })
@@ -52,6 +46,7 @@ router.add('/messages', async (req, res) => {
   for (const request of requests) {
     try {
       await request.w.write(new TextEncoder().encode(`data: ${JSON.stringify(message)}\n\n`))
+      await request.w.flush()
     } catch (err) {
       requests.splice(requests.indexOf(request), 1)
     }
